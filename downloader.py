@@ -3,12 +3,26 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import sys
+import time
 import base64
 import urllib.parse
 
-def get_url(referral_page):
-	response = requests.get(referral_page, headers = {'X-Requested-With': 'XMLHttpRequest', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win 64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'})
-	soup = BeautifulSoup(response.text, 'html.parser')
+def get_url(session, referral_page):
+	global rate
+	print('Accessing the decrypted link.')
+	while True:
+		try:
+			print('waiting for', rate, 'seconds.')
+			time.sleep(rate)
+			response = session.get(referral_page, headers = {'X-Requested-With': 'XMLHttpRequest', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win 64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'})
+			soup = BeautifulSoup(response.text, 'html.parser')
+		except Exception as e:
+			print(e)
+			print('limiting request rates by +60s.')
+			rate += 60
+			continue
+		break
+
 	video_request_scripts = soup.find_all('script')
 	for script in video_request_scripts:
 		if str(script).find('getvidlink') > 1:
@@ -20,12 +34,29 @@ def get_url(referral_page):
 	decoded_filename = urllib.parse.unquote(vid_url)
 	trimmed_filename = decoded_filename.rsplit('&')[0].rsplit('/')[-1]
 	filename = ''.join([char for char in trimmed_filename if not char.isspace()])
-	page = requests.get(url + vid_url, headers = {'X-Requested-With': 'XMLHttpRequest','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}).json()
-	download_url = page['cdn']+'/getvid?evid='+page['enc']
-	return {'url': download_url, 'filename': filename}
+	print('Requesting the download link.')
+	while True:
+		print('waiting for', rate, 'seconds.')
+		time.sleep(rate)
+		try:
+			page = session.get(url + vid_url, headers = {'X-Requested-With': 'XMLHttpRequest','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}).json()
+			download_url = page['cdn']+'/getvid?evid='+page['enc']
+		except Exception as e:
+			print(e)
+			print('limiting request rates by +60s.')
+			rate += 60
+			continue
+		break
+	if filename and download_url:
+		return {'url': download_url, 'filename': filename}
+	else:
+		raise Exception('Either download_url or filename are blank.')
 
-def download_video(url, filename):
-	r = requests.get(url, headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}, stream = True)
+def download_video(session, url, filename):
+	global rate
+	print('waiting for', rate, 'seconds.')
+	time.sleep(rate)
+	r = session.get(url, headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}, stream = True)
 	with open(filename, 'wb') as f:
 		for chunk in r.iter_content(chunk_size = 1024):
 			if chunk:
@@ -35,12 +66,12 @@ def download_video(url, filename):
 def get_links(soup, desired_class):
 	links = []
 	i = 0
-	for link in soup.find_all(class_ = desired_class):
+	for link in soup.find_all(class_ = desired_class)[::-1]:
 		hit = link.find('a')
 		if hit:
-			links.append({'index': i, 'href': hit.get('href'), 'title': hit.get('title')})
+			links.append({'index': i, 'href': hit.get('href'), 'title': hit.get('title').lstrip('Watch')})
 		else:
-			links.append({'index': i, 'href': link.get('href'), 'title': link.get('title')})
+			links.append({'index': i, 'href': link.get('href'), 'title': link.get('title').lstrip('Watch')})
 		i += 1
 	return links
 
@@ -79,6 +110,7 @@ def prompt_user(dictionary):
 def deobfuscate(script):
 	# get the salt
 	salt_split = script.split()
+	# print(salt_split)
 	alnum = []
 	for string in salt_split:
 		# get rid of symbols
@@ -92,9 +124,7 @@ def deobfuscate(script):
 	try:
 		print('salt:', salt)
 	except Exception as e:
-		print('unable to get salt:', e)
-		print('abandoning attempt to download this title')
-		return
+		return e
 
 	# locate the hash table
 	start = script.find('[') - 1
@@ -105,16 +135,19 @@ def deobfuscate(script):
 	# base64 decode
 	utf_chars = []
 	for string in encoded_strings:
+		# print('string:', string)
 		base64_bytes = string.encode('ascii')
 		hashed_bytes = base64.b64decode(base64_bytes)
 		salted_hash = hashed_bytes.decode('ascii')
 		# clean and remove salt
 		clean_hash = ''.join([char for char in salted_hash if char.isnumeric()])
-		if not clean_hash:
-			print('could not clean hash')
-			exit()
+		try:
+			clean_hash
+		except Exception as e:
+			return e
 		utf_chars.append(chr(int(clean_hash) - salt))
 		decrypted_content = ''.join(utf_chars)
+		# print(decrypted_content)
 	return BeautifulSoup(decrypted_content, 'html.parser')
 
 if __name__ == '__main__':
@@ -123,9 +156,12 @@ if __name__ == '__main__':
 		print('Usage: python3', __file__, '"search query"')
 		exit()
 
+	global rate
+	rate = 0
 	url = 'https://www.wcostream.com'
 	search = sys.argv[-1]
 	post_data = {'catara': search, 'konuara':'series'}
+
 	s = requests.Session()
 
 	response = s.post(url + '/search', data = post_data)
@@ -133,37 +169,87 @@ if __name__ == '__main__':
 
 	# the class for the initial search result is 'aramadabaslik'
 	links = get_links(soup, 'aramadabaslik')
+	if len(links) == 0:
+		print('No results.')
+		exit()
 
 	selections = prompt_user(links)
 	for selection in selections:
 		content_page = links[selection]['href']
 		series = 'https://www.wcostream.com' + content_page
-		response = s.get(series)
-		soup = BeautifulSoup(response.text, 'html.parser')
+
+		while True:
+			print('waiting for', rate, 'seconds.')
+			time.sleep(rate)
+			try:
+				response = s.get(series)
+				soup = BeautifulSoup(response.text, 'html.parser')
+			except Exception as e:
+				print(e)
+				print('limiting request rates by +60s')
+				rate += 60
+				continue
+			break
+
 		seasons = get_links(soup, 'sonra')
 		downloads_index = prompt_user(seasons)
 		for i in downloads_index:
 			print('attempting to locate:', seasons[i]['title'])
 			video_index = seasons[i]['href']
-			response = s.get(video_index)
-			soup = BeautifulSoup(response.text, 'html.parser')
-			data = soup.find('meta', itemprop = 'embedURL')
-			content = data.get('content')
-			# print('content:', content)
-			# get the script that loads dynamic html
-			scripts = soup.find_all('script')
-			scripts = [str(i) for i in scripts]
-			script = max(scripts, key = len)
+
+			while True:
+				print('waiting for', rate, 'seconds.')
+				time.sleep(rate)
+				try:
+					response = s.get(video_index)
+					soup = BeautifulSoup(response.text, 'html.parser')
+				except Exception as e:
+					print(e)
+					print('limiting request rates by +60s')
+					rate += 60
+					continue
+				break
+
+			# get the script that loads the dynamic html
+			print('Attempting to locate the encrypted content.')
+			try:
+				scripts = soup.find_all('script')
+				scripts = [str(i) for i in scripts]
+				script = max(scripts, key = len)
+				script
+			except Exception as e:
+				print(e)
+				print('unable to find the encrypted content, skipping.')
+				continue
+
 			# decrypt the dynamic html
-			print('attempting to crack the encryption')
-			html = deobfuscate(script)
-			cracked = url + html.find('iframe').get('src')
-			print('hidden link successfully decrypted:')
-			print(cracked)
-			download_data = get_url(cracked)
-			print('impersonating friendly request for download link')
-			filename = download_data['filename']
-			download_link = download_data['url']
-			print('attempting to download as', filename)
-			download_video(download_link, filename)
-			print('download successful!')
+			print('attempting to crack the encryption.')
+			try:
+				html = deobfuscate(script)
+				cracked = url + html.find('iframe').get('src')
+				cracked
+			except Exception as e:
+				print(e)
+				print('Unable to decrypt request link, skipping.')
+				continue
+
+			# request the actual video link
+			try:
+				download_data = get_url(s, cracked)
+				filename = download_data['filename']
+				download_link = download_data['url']
+			except Exception as e:
+				print(e)
+				print('skipping.')
+				continue
+
+			print('attempting to download video.')
+			try:
+				download_video(s, download_link, filename)
+			except Exception as e:
+				print(e)
+				print('skipping.')
+				continue
+			print('Successfully downloaded:', filename)
+			print()
+	exit()
