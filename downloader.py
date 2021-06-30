@@ -1,4 +1,4 @@
-#!/Library/Frameworks/Python.framework/Versions/3.9/bin/python3
+#!/usr/bin/env python3
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -41,27 +41,37 @@ def get_url(session, referral_page):
 		try:
 			page = session.get(url + vid_url, headers = {'X-Requested-With': 'XMLHttpRequest','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}).json()
 			download_url = page['cdn']+'/getvid?evid='+page['enc']
+			alt_url = page['server']+'/getvid?evid='+page['enc']
 		except Exception as e:
 			print(e)
 			print('limiting request rates by +60s.')
 			rate += 60
 			continue
 		break
+
 	if filename and download_url:
-		return {'url': download_url, 'filename': filename}
+		return {'url': download_url, 'filename': filename, 'alt_url': alt_url}
 	else:
 		raise Exception('Either download_url or filename are blank.')
 
-def download_video(session, url, filename):
+def download_video(session, url, alt_url, filename):
 	global rate
 	print('waiting for', rate, 'seconds.')
 	time.sleep(rate)
-	r = session.get(url, headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}, stream = True)
-	with open(filename, 'wb') as f:
-		for chunk in r.iter_content(chunk_size = 1024):
-			if chunk:
-				f.write(chunk)
-	return (filename)
+	try:
+		r = session.get(url, headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}, stream = True)
+		with open(filename, 'wb') as f:
+			for chunk in r.iter_content(chunk_size = 1024):
+				if chunk:
+					f.write(chunk)
+		return (filename)
+	except:
+		r = session.get(alt_url, headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0'}, stream = True)
+		with open(filename, 'wb') as f:
+			for chunk in r.iter_content(chunk_size = 1024):
+				if chunk:
+					f.write(chunk)
+		return (filename)
 
 def get_links(soup, desired_class):
 	links = []
@@ -236,8 +246,13 @@ if __name__ == '__main__':
 			# request the actual video link
 			try:
 				download_data = get_url(s, cracked)
-				filename = download_data['filename']
+				#filename = download_data['filename']
+				filename = ''.join([
+					x for x in download_data['filename'] if x.isalnum()
+					or x == '.'
+				])
 				download_link = download_data['url']
+				alt_url = download_data['alt_url']
 			except Exception as e:
 				print(e)
 				print('skipping.')
@@ -245,7 +260,7 @@ if __name__ == '__main__':
 
 			print('attempting to download video.')
 			try:
-				download_video(s, download_link, filename)
+				download_video(s, download_link, alt_url, filename)
 			except Exception as e:
 				print(e)
 				print('skipping.')
