@@ -57,7 +57,7 @@ def add_structure(videos, show_name, selections, full_auto):
         #print("Video numbers: ", video_numbers)
         if(len(video_numbers) == 1):
             filename = show_name + " S1" + check_special(videos, video_index) + "E" + \
-                video_numbers[0] + " " + check_ova(videos, video_index) + "." + \
+                video_numbers[0] + check_ova(videos, video_index) + "." + \
                 videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
@@ -65,7 +65,7 @@ def add_structure(videos, show_name, selections, full_auto):
         elif(len(video_numbers) == 2):
             filename = show_name + " S" + \
                 video_numbers[0] + check_special(videos, video_index) + "E" + \
-                video_numbers[1] + " " + check_ova(
+                video_numbers[1] + check_ova(
                     videos, video_index) + "." + videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
