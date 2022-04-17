@@ -18,6 +18,13 @@ def check_special(videos, video_index):
         return ""
 
 
+def check_ova(videos, video_index):
+    if(re.search("ova", videos[video_index]["title"].lower())):
+        return " OVA"
+    else:
+        return ""
+
+
 def confirm_name(original_filename, filename, skip):
     while True:
         print()
@@ -50,7 +57,7 @@ def add_structure(videos, show_name, selections, full_auto):
         #print("Video numbers: ", video_numbers)
         if(len(video_numbers) == 1):
             filename = show_name + " S1" + check_special(videos, video_index) + "E" + \
-                video_numbers[0] + "." + \
+                video_numbers[0] + " " + check_ova(videos, video_index) + "." + \
                 videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
@@ -58,7 +65,8 @@ def add_structure(videos, show_name, selections, full_auto):
         elif(len(video_numbers) == 2):
             filename = show_name + " S" + \
                 video_numbers[0] + check_special(videos, video_index) + "E" + \
-                video_numbers[1] + "." + videos[video_index]["filetype"]
+                video_numbers[1] + " " + check_ova(
+                    videos, video_index) + "." + videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
                     videos[video_index]['filename'], filename, False)
