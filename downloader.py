@@ -18,17 +18,22 @@ def check_special(videos, video_index):
         return ""
 
 
-def confirm_name(original_filename, filename):
+def confirm_name(original_filename, filename, skip):
     while True:
         print()
         print("Original name: ")
         print(original_filename)
-        print(
-            "Is the following filename correct(REMEMBER FILETYPE EXTENSION)?[y/N]")
-        print(filename)
-        if input().lower() == "y":
-            return filename
+        if not skip:
+            print(
+                "Is the following filename correct(REMEMBER FILETYPE EXTENSION)?[y/N]")
+            print(filename)
+            if input().lower() == "y":
+                return filename
+            else:
+                print("Enter new name")
+                filename = input()
         else:
+            skip = False
             print("Enter new name")
             filename = input()
 
@@ -49,18 +54,18 @@ def add_structure(videos, show_name, selections, full_auto):
                 videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
-                    videos[video_index]['filename'], filename)
+                    videos[video_index]['filename'], filename, False)
         elif(len(video_numbers) == 2):
             filename = show_name + " S" + \
                 video_numbers[0] + check_special(videos, video_index) + "E" + \
                 video_numbers[1] + "." + videos[video_index]["filetype"]
             if not full_auto:
                 filename = confirm_name(
-                    videos[video_index]['filename'], filename)
+                    videos[video_index]['filename'], filename, False)
         else:
             print("Could not find episode nrs enter a file name manually:")
             filename = confirm_name(videos[video_index]['filename'],
-                                    videos[video_index]['filename'])
+                                    videos[video_index]['filename'], TRUE)
         print("Moving: \"", videos[video_index]['filename'],
               "\" To: \"", show_name + "/" + filename + "\"")
         os.rename(videos[video_index]['filename'], show_name + "/" + filename)
