@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+from operator import truediv
 from pickle import TRUE
+from jinja2 import Undefined
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -13,7 +15,7 @@ import os
 
 def check_special(videos, video_index):
     if(re.search("[S|s]pecial", videos[video_index]["title"])):
-        return " special "
+        return " special"
     else:
         return ""
 
@@ -45,38 +47,74 @@ def confirm_name(original_filename, filename, skip):
             filename = input()
 
 
-def add_structure(videos, show_name, selections, full_auto):
+def create_dir(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def prompt_modifier(message, modifier, current_selection):
+    if modifier == Undefined:
+        print("Specials/ova's can have weird naming. Use reference thetvdb.com for finding out the number of the first special episode (should be in season 0)")
+        print("Find out what this first special should be numbered and the rest will hopefully be figured out")
+        print(message)
+        while True:
+            response = input().lower()
+            try:
+                return response - current_selection
+            except:
+                print("Input must be a number, try again:")
+
+
+def add_structure(videos, show_name, selections, full_auto, manual_speicals):
     # print("asdadasd")
     # print(selections)
     # print(videos)
-    if not os.path.exists(show_name):
-        os.makedirs(show_name)
+    modifier = Undefined
+    create_dir(show_name)
     for video_index in selections:
         video_numbers = re.findall("(?<= )\d+", videos[video_index]["title"])
-        #print("Video title: ", videos[video_index]["title"])
-        #print("Video numbers: ", video_numbers)
+        # print("Video title: ", videos[video_index]["title"])
+        # print("Video numbers: ", video_numbers)
         if(len(video_numbers) == 1):
-            filename = show_name + " S1" + check_special(videos, video_index) + "E" + \
-                video_numbers[0] + check_ova(videos, video_index) + "." + \
-                videos[video_index]["filetype"]
-            if not full_auto:
-                filename = confirm_name(
-                    videos[video_index]['filename'], filename, False)
-        elif(len(video_numbers) == 2):
-            filename = show_name + " S" + \
-                video_numbers[0] + check_special(videos, video_index) + "E" + \
-                video_numbers[1] + check_ova(
-                    videos, video_index) + "." + videos[video_index]["filetype"]
-            if not full_auto:
-                filename = confirm_name(
-                    videos[video_index]['filename'], filename, False)
-        else:
-            print("Could not find episode nrs enter a file name manually:")
+            video_numbers.append(video_numbers[0])
+            video_numbers[0] = 1
+        if(len(video_numbers) > 2 or len(video_numbers) < 1):
+            if(len(video_numbers) < 1):
+                video_numbers.append("0")
+            print("Could not find episode nrs, enter a file name manually:")
             filename = confirm_name(videos[video_index]['filename'],
                                     videos[video_index]['filename'], TRUE)
-        print("Moving: \"", videos[video_index]['filename'],
-              "\" To: \"", show_name + "/" + filename + "\"")
-        os.rename(videos[video_index]['filename'], show_name + "/" + filename)
+        else:
+            if check_special(videos, video_index) or check_ova(videos, video_index):
+                modifier = prompt_modifier(
+                    "This is mostly guesswork, so it might not be(probably isn't) correct", modifier, video_index)
+                video_numbers[0] = 0
+                special_number = video_index + modifier
+                filename = show_name + " S" + str(video_numbers[0]) + "E" + \
+                    str(special_number) + check_ova(videos, video_index) + check_special(videos, video_index) + "." + \
+                    videos[video_index]["filetype"]
+                if manual_special:
+                    confirm_name(videos[video_index]
+                                 ['filename'], filename, False)
+                else:
+                    print(
+                        "It is HIGHLY suggested to at least doublecheck a correct name for specials/ovas, are you sure you don't want to doublecheck?[y/N]")
+                    if input().lower == "y":
+                        confirm_name(videos[video_index]
+                                     ['filename'], filename, False)
+            else:
+                filename = show_name + " S" + str(video_numbers[0]) + "E" + \
+                    str(video_numbers[1]) + check_ova(videos, video_index) + check_special(videos, video_index) + "." + \
+                    videos[video_index]["filetype"]
+            if not full_auto:
+                filename = confirm_name(
+                    videos[video_index]['filename'], filename, False)
+
+        dir = show_name + "/" + str(video_numbers[0]) + "/"
+        create_dir(dir)
+        print("Moving \"" + videos[video_index]
+              ['filename'] + "\" to \"" + dir + filename)
+        os.rename(videos[video_index]['filename'], dir + filename)
 
 
 def get_url(session, referral_page):
@@ -250,6 +288,8 @@ def deobfuscate(script):
 if __name__ == '__main__':
     autorename_on = False
     full_auto = False
+    for_plex = False
+    manual_special = True
     if len(sys.argv) != 2:
         print('Usage: python3', __file__, '"search query"')
         exit()
@@ -295,10 +335,21 @@ if __name__ == '__main__':
             "Do you want to autorename the videos?(You will be able to get prompted with every name)[y/N]")
         if(input().lower() == "y"):
             autorename_on = True
-            print("Do you want to confirm every name manually?[Y/n]")
+            print("Do you want it organised for plex?[y/N]")
+            print(
+                "Plex handles specials and ova's badly, so if you are not using it with plex, respond with n")
+            if(input().lower() == "y"):
+                for_plex = True
+            print(
+                "Do you want to confirm every name manually?(to do only specials answer no here)[Y/n]")
+            if(for_plex):
+                print("HIGHLY recommended you confirm at least all OVAs/Specials manully since figuring out the right name for specials/OVAs for plex is inaccurate")
             if input().lower() == "n":
+                print("Do you want to confirm just the specials/OVAs?[Y/n]")
+                if input().lower() == "n":
+                    manual_special = False
                 print(
-                    "You understand that full auto renaming might name a file wrong and that there is no undo?[\"yes\"/\"No\"]")
+                    "You understand that full-auto/semi-auto renaming might name a file wrong and that there is no undo?[\"yes\"/\"No\"]")
                 while True:
                     answer = input().lower()
                     if answer == "yes":
@@ -377,5 +428,6 @@ if __name__ == '__main__':
             print('Successfully downloaded:', filename)
             print()
     if(autorename_on):
-        add_structure(seasons, search, downloads_index, full_auto)
+        add_structure(seasons, search, downloads_index,
+                      full_auto, manual_special)
     exit()
