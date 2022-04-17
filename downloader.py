@@ -298,7 +298,7 @@ if __name__ == '__main__':
             print("Do you want to confirm every name manually?[Y/n]")
             if input().lower() == "n":
                 print(
-                    "You understand that full auto renaming might name a file wrong and that there is no undo?[\"yes\"/\"NO\"]")
+                    "You understand that full auto renaming might name a file wrong and that there is no undo?[\"yes\"/\"No\"]")
                 while True:
                     answer = input().lower()
                     if answer == "yes":
