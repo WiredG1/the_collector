@@ -49,6 +49,7 @@ def add_structure(videos, show_name, selections, full_auto):
     # print("asdadasd")
     # print(selections)
     # print(videos)
+    special_nr = 0
     if not os.path.exists(show_name):
         os.makedirs(show_name)
     for video_index in selections:
